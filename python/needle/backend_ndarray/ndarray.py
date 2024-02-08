@@ -5,11 +5,12 @@ import numpy as np
 from . import ndarray_backend_numpy
 from . import ndarray_backend_cpu
 
-
 # math.prod not in Python 3.7
 def prod(x):
     return reduce(operator.mul, x, 1)
 
+def sum_iter(x):
+    return reduce(operator.add, x, 0)
 
 class BackendDevice:
     """A backend device, wrapps the implementation module."""
@@ -247,7 +248,11 @@ class NDArray:
         """
 
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        if (not self.is_compact):
+            raise Exception("array not compact")
+        if prod(self.shape) != prod(new_shape):
+            raise Exception("shape product not equal")
+        return self.make(shape=new_shape, handle=self._handle, device=self._device) 
         ### END YOUR SOLUTION
 
     def permute(self, new_axes):
@@ -270,9 +275,29 @@ class NDArray:
             to the same memory as the original NDArray (i.e., just shape and
             strides changed).
         """
-
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        ### BEGIN YOUR SOLUTION    
+        # original_shape = (2, 3, 4)
+        # permute = (2, 0, 1)
+        # new_shape would be (4, 2, 3)
+        # strides would be  (1, 12, 4)
+        # or                (1, 3*4, 4)
+        # more generallym if origianl shape = (d1, d2, d3, d4...)
+        # new shape = (d1', d2', d3', d4'...)
+        # let's say d1' = d3; then strides[0] = prod(d4, d5, ...)
+        #           d2' = d1, then strides[1] = prod(d2, d3, d4, ...)
+        # so on and forth;  
+        strides = [None] * len(self.shape)
+        new_shape = [None] * len(self.shape)
+        for dim_idx, dim in enumerate(self.shape):
+            original_axis = new_axes[dim_idx]
+            if original_axis == len(self.shape) - 1: # last axis
+                strides[dim_idx] = 1
+            else:
+                strides[dim_idx] = prod(self.shape[original_axis+1:]) 
+            new_shape[dim_idx] = self.shape[original_axis]
+        strides = tuple(strides) 
+        new_shape = tuple(new_shape)        
+        return self.make(shape=new_shape, strides=strides, handle=self._handle, device=self._device)
         ### END YOUR SOLUTION
 
     def broadcast_to(self, new_shape):
@@ -296,7 +321,13 @@ class NDArray:
         """
 
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        strides = list(self._strides)
+        for i, dim in enumerate(self.shape):
+            new_dim = new_shape[i]
+            if dim == 1:
+                strides[i] = 0
+        strides = tuple(strides)
+        return self.make(shape=new_shape, strides=strides, handle=self._handle, device=self._device)                                
         ### END YOUR SOLUTION
 
     ### Get and set elements
@@ -354,16 +385,25 @@ class NDArray:
         # handle singleton as tuple, everything as slices
         if not isinstance(idxs, tuple):
             idxs = (idxs,)
-        idxs = tuple(
-            [
-                self.process_slice(s, i) if isinstance(s, slice) else slice(s, s + 1, 1)
-                for i, s in enumerate(idxs)
-            ]
-        )
+        idxs_processed = []
+        for i, s in enumerate(idxs):
+            if isinstance(s, slice):
+                idxs_processed.append(self.process_slice(s, i))
+            else:
+                idxs_processed.append(slice(s, s+1, 1))
+        idxs = tuple(idxs_processed)
         assert len(idxs) == self.ndim, "Need indexes equal to number of dimensions"
 
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        offset = sum_iter([self._strides[i] * idxs[i].start for i in range(len(self.shape))])            
+        new_shape = [None] * len(self.shape)
+        new_strides = [None] * len(self.shape)
+        for i, slice_i in enumerate(idxs):
+            new_shape[i] = math.ceil((slice_i.stop - slice_i.start)*1.0 / slice_i.step)
+            new_strides[i] = self.strides[i] * slice_i.step
+        new_shape = tuple(new_shape)
+        new_strides = tuple(new_strides) 
+        return self.make(shape=new_shape, strides=new_strides, offset=offset, handle=self._handle, device=self._device)
         ### END YOUR SOLUTION
 
     def __setitem__(self, idxs, other):

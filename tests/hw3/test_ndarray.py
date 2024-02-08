@@ -84,6 +84,7 @@ def check_same_memory(original, view):
 )
 @pytest.mark.parametrize("device", _DEVICES, ids=["cpu", "cuda"])
 def test_compact(params, device):
+    print("Tianhao debug", np.__version__)
     shape, np_fn, nd_fn = params["shape"], params["np_fn"], params["nd_fn"]
     _A = np.random.randint(low=0, high=10, size=shape)
     A = nd.array(_A, device=device)
@@ -290,6 +291,7 @@ reshape_params = [
 @pytest.mark.parametrize("params", reshape_params)
 @pytest.mark.parametrize("device", _DEVICES, ids=["cpu", "cuda"])
 def test_reshape(device, params):
+    print("Tianhao debug", np.__version__)
     shape = params["shape"]
     new_shape = params["new_shape"]
     _A = np.random.randn(*shape)
