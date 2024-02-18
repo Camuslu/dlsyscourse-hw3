@@ -506,6 +506,19 @@ void EwiseTanh(const CudaArray& a, CudaArray* out) {
   EwiseTanhKernel<<<dim.grid, dim.block>>>(a.ptr, out->ptr, out->size);
 }
 
+__global__ void MatmulKernel(const scalar_t* a, const scalar_t* b, scalar_t* out, uint32_t M, uint32_t N, uint32_t P) {
+  size_t gid = blockIdx.x * blockDim.x + threadIdx.x;
+  uint32_t i = gid / P;
+  uint32_t j = gid % P;
+  scalar_t temp = 0.0;
+  if (gid < M * P) {
+    for (int k = 0; k < N; k++){
+      temp += a[i * N + k] * b[k * P + j];
+    }
+    out[i * P + j] = temp;
+  }
+}
+
 
 void Matmul(const CudaArray& a, const CudaArray& b, CudaArray* out, uint32_t M, uint32_t N,
             uint32_t P) {
@@ -532,7 +545,9 @@ void Matmul(const CudaArray& a, const CudaArray& b, CudaArray* out, uint32_t M, 
    */
 
   /// BEGIN SOLUTION
-  assert(false && "Not Implemented");
+  // naive M * P threads
+  CudaDims dim = CudaOneDim(M * P); 
+  MatmulKernel<<<dim.grid, dim.block>>>(a.ptr, b.ptr, out->ptr, M, N, P);
   /// END SOLUTION
 }
 
@@ -661,7 +676,7 @@ PYBIND11_MODULE(ndarray_backend_cuda, m) {
   m.def("ewise_exp", EwiseExp);
   m.def("ewise_tanh", EwiseTanh);
 
-  // m.def("matmul", Matmul);
+  m.def("matmul", Matmul);
 
   m.def("reduce_max", ReduceMax);
   m.def("reduce_sum", ReduceSum);
